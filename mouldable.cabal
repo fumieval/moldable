@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6e0b2587c86d4ed0ff17e17a8849984708d1de158bfaa66d8cdcde16b597b90c
+-- hash: 661ccfe729fc35964cacb0c4ba4caca308e2407388d16b97b49d90e1e99de84a
 
 name:           mouldable
 version:        0
@@ -27,6 +27,7 @@ library
   ghc-options: -Wall
   build-depends:
       base >=4.7 && <5
+    , tagged
     , template-haskell
   exposed-modules:
       Data.Mouldable
@@ -42,6 +43,7 @@ test-suite th
   build-depends:
       base >=4.7 && <5
     , mouldable
+    , tagged
     , template-haskell
   other-modules:
       Paths_mouldable
