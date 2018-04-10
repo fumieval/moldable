@@ -1,0 +1,48 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 6e0b2587c86d4ed0ff17e17a8849984708d1de158bfaa66d8cdcde16b597b90c
+
+name:           mouldable
+version:        0
+description:    Please see the README on Github at <https://github.com/fumieval/mouldable#readme>
+homepage:       https://github.com/fumieval/mouldable#readme
+bug-reports:    https://github.com/fumieval/mouldable/issues
+author:         Fumiaki Kinoshita
+maintainer:     fumiexcel@gmail.com
+copyright:      Copyright (c) 2018 Fumiaki Kinoshita
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+source-repository head
+  type: git
+  location: https://github.com/fumieval/mouldable
+
+library
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base >=4.7 && <5
+    , template-haskell
+  exposed-modules:
+      Data.Mouldable
+  other-modules:
+      Paths_mouldable
+  default-language: Haskell2010
+
+test-suite th
+  type: exitcode-stdio-1.0
+  main-is: TH.hs
+  hs-source-dirs:
+      tests
+  build-depends:
+      base >=4.7 && <5
+    , mouldable
+    , template-haskell
+  other-modules:
+      Paths_mouldable
+  default-language: Haskell2010

@@ -1,0 +1,37 @@
+name:                mouldable
+version:             "0"
+github:              "fumieval/mouldable"
+license:             BSD3
+author:              "Fumiaki Kinoshita"
+maintainer:          "fumiexcel@gmail.com"
+copyright:           "Copyright (c) 2018 Fumiaki Kinoshita"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Data
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/fumieval/mouldable#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- template-haskell
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Data.Mouldable
+  ghc-options: -Wall
+
+tests:
+  th:
+    source-dirs: tests
+    main: TH.hs
+    dependencies:
+      - mouldable
