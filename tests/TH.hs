@@ -4,9 +4,9 @@
 {-# OPTIONS_GHC -ddump-splices #-}
 
 
-import Data.Mouldable
+import Data.Moldable
 
-declareMould [d|
+declareMold [d|
   data Foo = Foo
     { foo :: Int
     , bar :: Bool

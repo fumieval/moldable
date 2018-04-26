@@ -1,6 +1,6 @@
 name:                mouldable
 version:             "0"
-github:              "fumieval/mouldable"
+github:              "fumieval/moldable"
 license:             BSD3
 author:              "Fumiaki Kinoshita"
 maintainer:          "fumiexcel@gmail.com"
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/fumieval/mouldable#readme>
+description:         Please see the README on Github at <https://github.com/fumieval/moldable#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -27,7 +27,7 @@ dependencies:
 library:
   source-dirs: src
   exposed-modules:
-    - Data.Mouldable
+    - Data.Moldable
   ghc-options: -Wall
 
 tests:
