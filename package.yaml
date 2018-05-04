@@ -1,4 +1,4 @@
-name:                mouldable
+name:                moldable
 version:             "0"
 github:              "fumieval/moldable"
 license:             BSD3
@@ -35,4 +35,4 @@ tests:
     source-dirs: tests
     main: TH.hs
     dependencies:
-      - mouldable
+      - moldable
