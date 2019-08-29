@@ -1,5 +1,4 @@
-moldable: TH-assisted HKD
-====
+![logo](https://github.com/fumieval/moldable/blob/master/artwork/logo-256px.png?raw=true)
 
 ```haskell
 declareMold [d|
