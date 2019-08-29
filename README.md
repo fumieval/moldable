@@ -5,7 +5,7 @@ declareMold [d|
   data Foo = Foo
     { foo :: Int
     , bar :: Bool
-    }
+    }|]
 ```
 
 The declaration above instead creates a following datatype:
