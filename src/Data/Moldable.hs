@@ -1,138 +1,148 @@
-{-# LANGUAGE Rank2Types, TypeFamilies, TemplateHaskell, KindSignatures #-}
-module Data.Moldable where
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+module Data.Moldable (Moldable(..)
+  , Raw
+  , Ann
+  , Shroud
+  , declareMold
+  , Wrap(..)
+  , rewrap
+  , rewrapF
+  ) where
 
-import Data.Functor.Identity
-import Data.Tagged
 import Language.Haskell.TH hiding (cxt)
+import qualified Data.Kind as K
+import Data.Tagged
+import GHC.TypeLits
+import Unsafe.Coerce
 
-class Moldable a where
-  data Mold a (h :: * -> *) :: *
-  moldMap :: Applicative f => (forall x. h x -> f x) -> Mold a h -> f a
-  remold :: a -> Mold a Identity
-  traverseMold :: Applicative f => (forall x. g x -> f (h x)) -> Mold a g -> f (Mold a h)
+data Raw
+data Ann (f :: Symbol -> K.Type -> K.Type)
 
-class Moldable a => MoldableZip a where
-  zipMold :: (forall x. f x -> g x -> h x) -> Mold a f -> Mold a g -> Mold a h
+type family Shroud switch name a where
+  Shroud Raw _ a = a
+  Shroud (Ann f) name a = f name a
 
-data MoldSettings = MoldSettings
-  { conNameModifier :: Name -> Name
-  , infixConNameModifier :: Name -> Name
-  , fieldNameModifier :: Name -> Name
-  , tagRecordFields :: Bool
-  }
+-- | Turn a conventional wrapper into an annotated wrapper
+data Wrap h name a = Wrap { unWrap :: h a }
 
-defaultMoldSettings :: MoldSettings
-defaultMoldSettings = MoldSettings
-  { conNameModifier = mkName . ("M'"++) . nameBase
-  , infixConNameModifier = mkName . (":"++) . nameBase
-  , fieldNameModifier = mkName . ("m'"++) . nameBase
-  , tagRecordFields = True
-  }
+-- | Modify the content of 'Wrap'.
+rewrap :: (forall x. f x -> g x) -> Wrap f k a -> Wrap g k a
+rewrap f = Wrap . f . unWrap
+{-# INLINE rewrap #-}
+
+-- | Modify the content of 'Wrap' over a functor.
+rewrapF :: Functor t => (forall x. f x -> t (g x)) -> Wrap f k a -> t (Wrap g k a)
+rewrapF f = fmap Wrap . f . unWrap
+{-# INLINE rewrapF #-}
+
+class Moldable m where
+  annotateMold :: m Raw -> m (Ann Tagged)
+  unannotateMold :: m (Ann Tagged) -> m Raw
+  traverseMold :: Applicative f => (forall k x. KnownSymbol k => g k x -> f (h k x)) -> m (Ann g) -> f (m (Ann h))
+  traverseMold_ :: Applicative f => (forall k x. KnownSymbol k => g k x -> f r) -> m (Ann g) -> f ()
+  zipMold :: (forall k x. KnownSymbol k => f k x -> g k x -> h k x) -> m (Ann f) -> m (Ann g) -> m (Ann h)
+  zipMoldA :: Applicative t => (forall k x. KnownSymbol k => f k x -> g k x -> t (h k x)) -> m (Ann f) -> m (Ann g) -> t (m (Ann h))
+  zipMoldA_ :: Applicative t => (forall k x. KnownSymbol k => f k x -> g k x -> t r) -> m (Ann f) -> m (Ann g) -> t ()
 
 declareMold :: DecsQ -> DecsQ
-declareMold = declareMoldWith defaultMoldSettings
-
-declareMoldWith :: MoldSettings -> DecsQ -> DecsQ
-declareMoldWith cfg decsQ = do
+declareMold decsQ = do
   decs <- decsQ
-  decs' <- traverse (transform cfg) decs
+  decs' <- traverse go decs
   return $ concat decs'
-
-asTyVar :: TyVarBndr -> Type
-asTyVar (PlainTV name) = VarT name
-asTyVar (KindedTV name _) = VarT name
-
-transformCon :: MoldSettings
-  -> Name -- ^ the name of the wrapper variable
-  -> Con -- ^ original constructor
-  -> (Con -- modified constructor
-    , Name -- original constructor name
-    , Name -- modified constructor name
-    , Int -- number of fields
-    , [Exp] -- wrap fields
-    , [Exp] -- unwrap fields
-    )
-transformCon cfg h (NormalC name xs) =
-  (NormalC name' [(b, VarT h `AppT` t) | (b, t) <- xs]
-  , name, name', length xs, repeat (VarE 'id), repeat (VarE 'id))
   where
-    name' = conNameModifier cfg name
-transformCon cfg h (RecC name xs) = (RecC name'
-  [(fieldNameModifier cfg v, b, VarT h `AppT` t')
-  | (v, b, t) <- xs
-  , let t' | tagRecordFields cfg = ConT ''Tagged `AppT` LitT (StrTyLit $ nameBase v) `AppT` t
-           | otherwise = t
-  ], name, name', length xs
-  , if tagRecordFields cfg
-    then repeat (ConE 'Tagged)
-    else repeat (VarE 'id)
-  , if tagRecordFields cfg
-    then repeat (VarE 'unTagged)
-    else repeat (VarE 'id)
+    go (DataD _ dataName tvbs _ cons drv) = do
+      var <- newName "sw"
+      let transformed = map (transformCon var) cons
+      decs <- deriveMoldlike (ConT dataName) transformed
+      return $ DataD [] dataName
+        (tvbs ++ [PlainTV var])
+        Nothing
+        (map (\(c,_,_) -> c) transformed)
+        drv
+        : decs
+    go d = pure [d]
+
+type ConInfo = (Con -- modified constructor
+  , Name -- original constructor name
+  , Int -- number of fields
   )
-  where
-    name' = conNameModifier cfg name
-transformCon cfg h (InfixC (lb, lt) name (rb, rt)) = (InfixC
-  (lb, VarT h `AppT` lt)
-  name
-  (rb, VarT h `AppT` rt)
-  , name, name', 2, repeat (VarE 'id), repeat (VarE 'id))
-  where
-    name' = infixConNameModifier cfg name
-transformCon cfg h (ForallC tvbs cxt con) =
-  let (con', name, name', n, forward, backward) = transformCon cfg h con
-  in (ForallC tvbs cxt con', name, name', n, forward, backward)
-transformCon _ _ con = error $ "transformCon: unsupported " ++ show con
+
+transformCon :: Name -- ^ switch variable
+  -> Con -- ^ original constructor
+  -> ConInfo
+transformCon switchName (RecC name xs) = (RecC name
+  [(v, b, ConT ''Shroud
+    `AppT` VarT switchName
+    `AppT` LitT (StrTyLit $ nameBase v)
+    `AppT` t)
+  | (v, b, t) <- xs
+  ], name, length xs
+  )
+transformCon var (ForallC tvbs cxt con) =
+  let (con', name, n) = transformCon var con
+  in (ForallC tvbs cxt con', name, n)
+transformCon _ con = error $ "transformCon: unsupported " ++ show con
 
 varNames :: String -> Int -> [Name]
 varNames p n = [mkName (p ++ show i) | i <- [0..n - 1]]
 
-transform :: MoldSettings -> Dec -> Q [Dec]
-transform cfg (DataD cxt dataName tvbs kind cons _) = do
-  var <- newName "h"
-  let transformed = map (transformCon cfg var) cons
-  return $ concat [ pure $ DataD cxt dataName tvbs kind cons []
-    , pure $ InstanceD Nothing [] (ConT ''Moldable `AppT` ConT dataName)
-      [ DataInstD [] ''Mold
-          [foldl AppT (ConT dataName) (map asTyVar tvbs)
-          , VarT var] Nothing
-          (map (\(c,_,_,_,_,_) -> c) transformed)
-          []
-
-      , FunD 'moldMap [Clause
-        [VarP var, ConP name' $ map VarP vs]
-        (NormalB $ foldl
-          (\x (op, v, u) -> InfixE (Just x) (VarE op) (Just $ VarE 'fmap `AppE` u `AppE` (VarE var `AppE` VarE v)))
-          (ConE name) $ zip3 ('(<$>) : repeat '(<*>)) vs unwrap)
-        []
-        | (_, name, name', n, _, unwrap) <- transformed
-        , let vs = varNames "v" n]
-      , FunD 'remold [Clause
-        [ConP name $ map VarP vs]
-        (NormalB $ foldl
-          (\x (v, w) -> AppE x (VarE 'pure `AppE` (w `AppE` VarE v)))
-          (ConE name') (zip vs wrap))
-        []
-        | (_, name, name', n, wrap, _) <- transformed
-        , let vs = varNames "v" n]
+deriveMoldlike :: Type -> [ConInfo] -> DecsQ
+deriveMoldlike moldTy transformed = do
+  var <- newName "t"
+  return $ pure $ InstanceD Nothing [] (ConT ''Moldable `AppT` moldTy) $
+      [ ValD (VarP 'annotateMold) (NormalB $ VarE 'unsafeCoerce) []
+      , PragmaD $ InlineP 'annotateMold Inline FunLike AllPhases
+      , ValD (VarP 'unannotateMold) (NormalB $ VarE 'unsafeCoerce) []
+      , PragmaD $ InlineP 'unannotateMold Inline FunLike AllPhases
       , FunD 'traverseMold [Clause
         [VarP var, ConP name' $ map VarP vs]
         (NormalB $ foldl
           (\x (op, v) -> InfixE (Just x) (VarE op) $ Just $ VarE var `AppE` VarE v)
           (ConE name') $ zip ('(<$>) : repeat '(<*>)) vs)
         []
-        | (_, _, name', n, _, _) <- transformed
-        , let vs = varNames "v" n]]
-    , [InstanceD Nothing [] (ConT ''MoldableZip `AppT` ConT dataName)
-      [ FunD 'zipMold [Clause
+        | (_, name', n) <- transformed
+        , let vs = varNames "v" n]
+    , PragmaD $ InlineP 'traverseMold Inline FunLike AllPhases
+    , FunD 'traverseMold_ [Clause
+        [VarP var, ConP name' $ map VarP vs]
+        (NormalB $ foldr
+          (\v x -> InfixE (Just $ VarE var `AppE` VarE v) (VarE '(*>)) $ Just x)
+          (VarE 'pure `AppE` TupE []) vs)
+        []
+        | (_, name', n) <- transformed
+        , let vs = varNames "v" n]
+    , PragmaD $ InlineP 'traverseMold_ Inline FunLike AllPhases
+    ] ++ concat [[FunD 'zipMold [Clause
         [VarP var, ConP name' $ map VarP xs, ConP name' $ map VarP ys]
         (NormalB $ foldl
           (\r (x, y) -> AppE r (VarE var `AppE` VarE x `AppE` VarE y))
           (ConE name') (zip xs ys))
         []
-        ]]
-      | [(_, _, name', n, _, _)] <- pure transformed
-      , let xs = varNames "x" n
-      , let ys = varNames "y" n
-      ]]
-transform _ d = pure [d]
+        ]
+    , PragmaD $ InlineP 'zipMold Inline FunLike AllPhases
+    , FunD 'zipMoldA [Clause
+      [VarP var, ConP name' $ map VarP xs, ConP name' $ map VarP ys]
+      (NormalB $ foldl
+        (\r (op, x, y) -> InfixE (Just r) (VarE op) $ Just $ VarE var `AppE` VarE x `AppE` VarE y)
+        (ConE name') (zip3 ('(<$>) : repeat '(<*>)) xs ys))
+      []
+      ]
+    , PragmaD $ InlineP 'zipMoldA Inline FunLike AllPhases
+    , FunD 'zipMoldA_ [Clause
+      [VarP var, ConP name' $ map VarP xs, ConP name' $ map VarP ys]
+      (NormalB $ foldr
+        (\(x, y) r -> InfixE (Just $ VarE var `AppE` VarE x `AppE` VarE y) (VarE '(*>)) $ Just r)
+        (VarE 'pure `AppE` TupE []) (zip xs ys))
+      []
+      ]
+    , PragmaD $ InlineP 'zipMoldA_ Inline FunLike AllPhases
+    ]
+    | [(_, name', n)] <- pure transformed
+    , let xs = varNames "x" n
+    , let ys = varNames "y" n
+    ]

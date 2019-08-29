@@ -2,9 +2,9 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9e33c8066f705cead9ca60ef160778dd92130691237564aa6a6f991b856d21ff
+-- hash: 42b2d7501c8cc845d0a5e113d7a9aac8907e1b986020132b81deedb5199d91c2
 
-name:           mouldable
+name:           moldable
 version:        0
 description:    Please see the README on Github at <https://github.com/fumieval/moldable#readme>
 homepage:       https://github.com/fumieval/moldable#readme
@@ -32,7 +32,7 @@ library
   exposed-modules:
       Data.Moldable
   other-modules:
-      Paths_mouldable
+      Paths_moldable
   default-language: Haskell2010
 
 test-suite th
@@ -42,9 +42,9 @@ test-suite th
       tests
   build-depends:
       base >=4.7 && <5
-    , mouldable
+    , moldable
     , tagged
     , template-haskell
   other-modules:
-      Paths_mouldable
+      Paths_moldable
   default-language: Haskell2010
